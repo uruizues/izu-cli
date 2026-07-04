@@ -1,0 +1,21 @@
+# Binaries
+izu
+*.exe
+dist/
+
+# Go
+*.test
+*.out
+vendor/
+
+# Config
+*.db
+cookies.json
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db

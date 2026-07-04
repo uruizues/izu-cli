@@ -1,0 +1,45 @@
+general:
+  provider: "animekai"
+  theme: "dark"
+  language: "en"
+
+player:
+  binary: ""
+  args:
+    - "--hwdec=auto-safe"
+    - "--vo=gpu-next"
+    - "--keep-open=yes"
+  ipc_socket: "/tmp/izu-mpv-socket"
+  volume: 100
+
+download:
+  enabled: true
+  path: "~/Downloads/anime"
+  quality: "best"
+  concurrent: 3
+
+providers:
+  animekai:
+    enabled: true
+    base_url: "https://animekai.to"
+    rate_limit: 30
+
+  allanime:
+    enabled: true
+    api_url: "https://api.allanime.day/api"
+    referer: "https://youtu-chan.com"
+    rate_limit: 20
+
+  animepahe:
+    enabled: true
+    base_url: "https://animepahe.com"
+    api_url: "https://animepahe.com/api.php"
+    rate_limit: 20
+
+discord:
+  enabled: true
+  client_id: ""
+
+storage:
+  backend: "sqlite"
+  path: "~/.config/izu-cli/data"
