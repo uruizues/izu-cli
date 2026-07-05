@@ -178,37 +178,80 @@ type episodesResponse struct {
 }
 
 func (c *Client) GetEpisodes(ctx context.Context, animeID string, page int) (*provider.EpisodePage, error) {
+	// Try Miruro first
 	url := fmt.Sprintf("%s/episodes/%s", c.baseURL, animeID)
 	data, err := c.doRequest(url)
-	if err != nil {
-		return nil, err
-	}
-
-	var resp episodesResponse
-	if err := json.Unmarshal(data, &resp); err != nil {
-		return nil, err
-	}
-
-	// Pick the first available provider's episode list (simple ID)
-	var episodes []provider.Episode
-	for _, provData := range resp.Providers {
-		for _, epList := range provData.Episodes {
-			for _, ep := range epList {
-				episodes = append(episodes, provider.Episode{
-					ID:     ep.ID,
-					Number: ep.Number,
-					Title:  ep.Title,
-				})
+	if err == nil {
+		var resp episodesResponse
+		if json.Unmarshal(data, &resp) == nil {
+			var episodes []provider.Episode
+			for _, provData := range resp.Providers {
+				for _, epList := range provData.Episodes {
+					for _, ep := range epList {
+						episodes = append(episodes, provider.Episode{
+							ID:     ep.ID,
+							Number: ep.Number,
+							Title:  ep.Title,
+						})
+					}
+					break
+				}
+				break
 			}
-			break
+
+			sort.Slice(episodes, func(i, j int) bool {
+				return episodes[i].Number < episodes[j].Number
+			})
+
+			pageSize := 25
+			start := (page - 1) * pageSize
+			if start >= len(episodes) {
+				start = len(episodes)
+			}
+			end := start + pageSize
+			if end > len(episodes) {
+				end = len(episodes)
+			}
+
+			return &provider.EpisodePage{
+				Episodes:    episodes[start:end],
+				TotalPages:  (len(episodes) + pageSize - 1) / pageSize,
+				CurrentPage: page,
+				HasNext:     end < len(episodes),
+			}, nil
 		}
-		break
 	}
 
-	// Sort episodes by number
-	sort.Slice(episodes, func(i, j int) bool {
-		return episodes[i].Number < episodes[j].Number
-	})
+	// Fallback: generate episodes from Jikan metadata
+	jikanURL := fmt.Sprintf("https://api.jikan.moe/v4/anime/%s", animeID)
+	jikanData, err := c.doRequest(jikanURL)
+	if err != nil {
+		return nil, fmt.Errorf("anime not available for streaming")
+	}
+
+	var jikanResp struct {
+		Data struct {
+			Title    string `json:"title"`
+			Episodes *int   `json:"episodes"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(jikanData, &jikanResp); err != nil {
+		return nil, fmt.Errorf("anime not available for streaming")
+	}
+
+	total := 1
+	if jikanResp.Data.Episodes != nil && *jikanResp.Data.Episodes > 0 {
+		total = *jikanResp.Data.Episodes
+	}
+
+	var episodes []provider.Episode
+	for i := 1; i <= total; i++ {
+		episodes = append(episodes, provider.Episode{
+			ID:     fmt.Sprintf("%s_ep%d", animeID, i),
+			Number: i,
+			Title:  fmt.Sprintf("Episode %d", i),
+		})
+	}
 
 	pageSize := 25
 	start := (page - 1) * pageSize
