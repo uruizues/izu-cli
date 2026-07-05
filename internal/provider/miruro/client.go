@@ -257,10 +257,10 @@ func (c *Client) GetStream(ctx context.Context, episodeID string) (*provider.Str
 		return c.fetchStream(episodeID)
 	}
 
-	// Build IDs for each provider
+	// Build IDs for each provider — provider is at index 1
 	var candidates []string
 	for _, prov := range providers {
-		parts[2] = prov
+		parts[1] = prov
 		candidates = append(candidates, strings.Join(parts, "/"))
 	}
 
