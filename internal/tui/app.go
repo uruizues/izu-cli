@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"strings"
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/textinput"
@@ -252,16 +253,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m Model) View() string {
 	if !m.ready {
-		return "Initializing..."
+		return LoadingStyle.Render("Initializing...")
 	}
 
 	var s string
-	s += TitleStyle.Render("iz u - anime cli") + "\n"
-	if len(m.providers) > 0 {
-		s += ProviderStyle.Render("Provider: "+m.providers[m.providerIdx].Name()) + "\n"
-	}
-	s += "\n"
 
+	// Header
+	s += TitleStyle.Render("iz u") + SubtitleStyle.Render(" — anime cli") + "\n"
+	if len(m.providers) > 0 {
+		s += ProviderStyle.Render("● " + m.providers[m.providerIdx].Name()) + "\n"
+	}
+	s += SeparatorStyle.Render(strings.Repeat("─", 50)) + "\n"
+
+	// Screen content
 	switch m.screen {
 	case screenSearch:
 		s += m.search.View()
@@ -274,21 +278,24 @@ func (m Model) View() string {
 	case screenWatchURL:
 		s += TitleStyle.Render("Watch from URL") + "\n\n"
 		s += m.watchURL.View() + "\n"
-		s += StatusBarStyle.Render("Paste URL from anime site and press Enter") + "\n"
+		s += SubtitleStyle.Render("Paste URL from anime site and press Enter") + "\n"
 	}
 
+	// Status bar
+	s += SeparatorStyle.Render(strings.Repeat("─", 50)) + "\n"
 	if m.screen == screenSearch && m.search.inputMode {
-		s += "\n" + StatusBarStyle.Render("[esc]exit search [enter]search")
+		s += StatusBarStyle.Render("[esc] exit search   [enter] search")
 	} else if m.screen == screenEpisodes {
-		s += "\n" + StatusBarStyle.Render("[↑↓]navigate [enter]play [esc]back")
+		s += StatusBarStyle.Render("[↑↓] navigate   [enter] play   [esc] back")
 	} else if m.screen == screenWatchURL {
-		s += "\n" + StatusBarStyle.Render("[enter]play [esc]cancel")
+		s += StatusBarStyle.Render("[enter] play   [esc] cancel")
 	} else {
-		s += "\n" + StatusBarStyle.Render("[/]search [w]watch URL [f]avorites [h]istory [tab]provider [q]uit")
+		s += StatusBarStyle.Render("[/] search   [w] watch URL   [f] favorites   [h] history   [tab] provider   [q] quit")
 	}
 
+	// Error display
 	if m.err != nil {
-		s += "\n" + StatusBarStyle.Render("Error: "+m.err.Error())
+		s += "\n" + ErrorStyle.Render("Error: "+m.err.Error())
 	}
 
 	return s

@@ -1,6 +1,9 @@
 package tui
 
 import (
+	"fmt"
+	"strings"
+
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/izu/izu-cli/internal/provider"
@@ -62,30 +65,58 @@ func (m *SearchModel) ExitInputMode() {
 }
 
 func (m SearchModel) View() string {
-	s := SearchStyle.Render(m.input.View()) + "\n\n"
+	s := SearchStyle.Render(m.input.View()) + "\n"
 
 	if m.loading {
-		s += "Searching...\n"
+		s += LoadingStyle.Render("Searching...") + "\n"
 		return s
 	}
 
 	if m.err != nil {
-		s += "Error: " + m.err.Error() + "\n"
+		s += ErrorStyle.Render("Error: " + m.err.Error()) + "\n"
 		return s
 	}
 
-	for i, result := range m.results {
-		cursor := " "
-		if i == m.cursor {
-			cursor = ">"
-			s += SelectedStyle.Render(cursor+" "+result.Title) + "\n"
-		} else {
-			s += NormalStyle.Render(cursor+" "+result.Title) + "\n"
-		}
+	if len(m.results) == 0 && !m.inputMode {
+		s += StatusBarStyle.Render("No results found.") + "\n"
+		return s
 	}
 
 	if len(m.results) == 0 {
 		s += StatusBarStyle.Render("Type to search...") + "\n"
+		return s
+	}
+
+	// Results header
+	s += SubtitleStyle.Render(fmt.Sprintf("%d results", len(m.results))) + "\n\n"
+
+	// Results list
+	for i, result := range m.results {
+		if i >= 20 {
+			break
+		}
+
+		// Build info parts
+		var parts []string
+		if result.Type != "" {
+			parts = append(parts, InfoLabel.Render(result.Type))
+		}
+		if result.Episodes > 0 {
+			parts = append(parts, fmt.Sprintf("%d eps", result.Episodes))
+		}
+		if result.Status != "" {
+			parts = append(parts, result.Status)
+		}
+		infoStr := ""
+		if len(parts) > 0 {
+			infoStr = " " + SubtitleStyle.Render("("+strings.Join(parts, " · ")+")")
+		}
+
+		if i == m.cursor {
+			s += SelectedStyle.Render(fmt.Sprintf(" ▶ %s", result.Title)) + infoStr + "\n"
+		} else {
+			s += NormalStyle.Render(fmt.Sprintf("   %s", result.Title)) + infoStr + "\n"
+		}
 	}
 
 	return s

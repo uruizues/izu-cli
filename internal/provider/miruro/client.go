@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"sort"
 	"strings"
 	"time"
 
@@ -199,6 +200,11 @@ func (c *Client) GetEpisodes(ctx context.Context, animeID string, page int) (*pr
 		}
 		break
 	}
+
+	// Sort episodes by number
+	sort.Slice(episodes, func(i, j int) bool {
+		return episodes[i].Number < episodes[j].Number
+	})
 
 	pageSize := 25
 	start := (page - 1) * pageSize
