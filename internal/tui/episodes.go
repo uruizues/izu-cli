@@ -21,36 +21,31 @@ func NewEpisodesModel() EpisodesModel {
 }
 
 func (m EpisodesModel) Update(msg tea.Msg) (EpisodesModel, tea.Cmd) {
-	switch msg := msg.(type) {
+	switch msg.(type) {
 	case episodeListMsg:
-		m.episodes = msg.episodes
-		m.loading = false
-		m.err = msg.err
-	case tea.KeyMsg:
-		switch msg.Type {
-		case tea.KeyUp:
-			if m.cursor > 0 {
-				m.cursor--
-			}
-		case tea.KeyDown:
-			if m.cursor < len(m.episodes)-1 {
-				m.cursor++
-			}
-		}
+		// Handled directly by app.go now
 	}
 	return m, nil
 }
 
 func (m EpisodesModel) View() string {
-	if m.anime == nil {
+	if m.anime == nil && !m.loading && m.err == nil && len(m.episodes) == 0 {
 		return ""
 	}
 
-	s := TitleStyle.Render(m.anime.Title) + "\n"
-	s += StatusBarStyle.Render(fmt.Sprintf("%s • %d episodes", m.anime.Type, m.anime.Episodes)) + "\n\n"
+	s := ""
+	if m.anime != nil {
+		s += TitleStyle.Render(m.anime.Title) + "\n"
+		s += StatusBarStyle.Render(fmt.Sprintf("%s • %d episodes", m.anime.Type, m.anime.Episodes)) + "\n\n"
+	}
 
 	if m.loading {
 		s += "Loading episodes...\n"
+		return s
+	}
+
+	if m.err != nil {
+		s += "Error: " + m.err.Error() + "\n"
 		return s
 	}
 

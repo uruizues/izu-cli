@@ -3,7 +3,6 @@ package allanime
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"strconv"
 
 	"github.com/izu/izu-cli/internal/provider"
@@ -12,22 +11,21 @@ import (
 const showQuery = `query ($showId: String!) {
   show(_id: $showId) {
     _id name englishName nativeName thumbnail description status
-    availableEpisodes availableEpisodesDetail
+    availableEpisodes
   }
 }`
 
 type showResponse struct {
 	Data struct {
 		Show struct {
-			ID                      string            `json:"_id"`
-			Name                    string            `json:"name"`
-			EnglishName             string            `json:"englishName"`
-			NativeName              string            `json:"nativeName"`
-			Thumbnail               string            `json:"thumbnail"`
-			Description             string            `json:"description"`
-			Status                  string            `json:"status"`
-			AvailableEpisodes       map[string]string `json:"availableEpisodes"`
-			AvailableEpisodesDetail map[string][]string `json:"availableEpisodesDetail"`
+			ID                string            `json:"_id"`
+			Name              string            `json:"name"`
+			EnglishName       string            `json:"englishName"`
+			NativeName        string            `json:"nativeName"`
+			Thumbnail         string            `json:"thumbnail"`
+			Description       string            `json:"description"`
+			Status            string            `json:"status"`
+			AvailableEpisodes map[string]int    `json:"availableEpisodes"`
 		} `json:"show"`
 	} `json:"data"`
 }
@@ -57,10 +55,7 @@ func (c *Client) GetAnime(ctx context.Context, id string) (*provider.Anime, erro
 		Image:       show.Thumbnail,
 		Type:        "TV",
 		Status:      show.Status,
-	}
-
-	if sub, ok := show.AvailableEpisodes["sub"]; ok {
-		fmt.Sscanf(sub, "%d", &anime.Episodes)
+		Episodes:    show.AvailableEpisodes["sub"],
 	}
 
 	return anime, nil
@@ -72,37 +67,21 @@ func (c *Client) GetEpisodes(ctx context.Context, animeID string, page int) (*pr
 		return nil, err
 	}
 
-	// Get episode list from show detail
-	variables := map[string]interface{}{
-		"showId": animeID,
-	}
-
-	data, err := c.doGraphQL(showQuery, variables)
-	if err != nil {
-		return nil, err
-	}
-
-	var resp showResponse
-	if err := json.Unmarshal(data, &resp); err != nil {
-		return nil, err
-	}
-
-	epStrings := resp.Data.Show.AvailableEpisodesDetail["sub"]
-	if len(epStrings) == 0 {
-		epStrings = resp.Data.Show.AvailableEpisodesDetail["dub"]
+	totalEpisodes := anime.Episodes
+	if totalEpisodes == 0 {
+		totalEpisodes = 1
 	}
 
 	var episodes []provider.Episode
-	for _, epStr := range epStrings {
-		epNum, _ := strconv.Atoi(epStr)
+	for i := 1; i <= totalEpisodes; i++ {
+		epStr := strconv.Itoa(i)
 		episodes = append(episodes, provider.Episode{
 			ID:     animeID + "_ep" + epStr,
-			Number: epNum,
+			Number: i,
 			Title:  "Episode " + epStr,
 		})
 	}
 
-	// Simple pagination
 	pageSize := 25
 	start := (page - 1) * pageSize
 	if start >= len(episodes) {
@@ -112,8 +91,6 @@ func (c *Client) GetEpisodes(ctx context.Context, animeID string, page int) (*pr
 	if end > len(episodes) {
 		end = len(episodes)
 	}
-
-	_ = anime // used for metadata fetch above
 
 	return &provider.EpisodePage{
 		Episodes:    episodes[start:end],

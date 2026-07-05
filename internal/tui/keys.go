@@ -13,6 +13,7 @@ type KeyMap struct {
 	Download   key.Binding
 	Favorite   key.Binding
 	History    key.Binding
+	WatchURL   key.Binding
 }
 
 func DefaultKeyMap() KeyMap {
@@ -27,5 +28,6 @@ func DefaultKeyMap() KeyMap {
 		Download: key.NewBinding(key.WithKeys("d"), key.WithHelp("d", "download")),
 		Favorite: key.NewBinding(key.WithKeys("f"), key.WithHelp("f", "favorite")),
 		History:  key.NewBinding(key.WithKeys("h"), key.WithHelp("h", "history")),
+		WatchURL: key.NewBinding(key.WithKeys("w"), key.WithHelp("w", "watch URL")),
 	}
 }

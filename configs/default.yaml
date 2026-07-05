@@ -1,5 +1,5 @@
 general:
-  provider: "animekai"
+  provider: "consumet"
   theme: "dark"
   language: "en"
 
@@ -18,20 +18,61 @@ download:
   quality: "best"
   concurrent: 3
 
+consumet:
+  enabled: true
+  base_url: "https://api.consumet.org"  # Self-host your own instance if this is down
+  provider: "hianime"  # hianime, animekai, animepahe, animesama, animesaturn, animeunity, kickassanime
+
 providers:
+  consumet_animekai:
+    enabled: false
+    base_url: "https://api.consumet.org"
+    rate_limit: 30
+
+  consumet_hianime:
+    enabled: false
+    base_url: "https://api.consumet.org"
+    rate_limit: 30
+
+  consumet_animepahe:
+    enabled: false
+    base_url: "https://api.consumet.org"
+    rate_limit: 20
+
+  consumet_animesama:
+    enabled: false
+    base_url: "https://api.consumet.org"
+    rate_limit: 20
+
+  consumet_animesaturn:
+    enabled: false
+    base_url: "https://api.consumet.org"
+    rate_limit: 20
+
+  consumet_animeunity:
+    enabled: false
+    base_url: "https://api.consumet.org"
+    rate_limit: 20
+
+  consumet_kickassanime:
+    enabled: false
+    base_url: "https://api.consumet.org"
+    rate_limit: 20
+
+  # Legacy providers (backward compatibility)
   animekai:
-    enabled: true
+    enabled: false
     base_url: "https://animekai.to"
     rate_limit: 30
 
   allanime:
-    enabled: true
+    enabled: false
     api_url: "https://api.allanime.day/api"
     referer: "https://youtu-chan.com"
     rate_limit: 20
 
   animepahe:
-    enabled: true
+    enabled: false
     base_url: "https://animepahe.com"
     api_url: "https://animepahe.com/api.php"
     rate_limit: 20

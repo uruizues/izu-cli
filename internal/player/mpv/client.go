@@ -31,13 +31,27 @@ func New(binary string, args []string, socketPath string) *Client {
 }
 
 func (c *Client) Play(ctx context.Context, info *provider.StreamInfo, opts player.PlayOptions) error {
-	args := append(c.args, "--input-ipc-server="+c.socketPath)
-
-	if info.Referer != "" {
-		args = append(args, "--http-header-fields=Referer: "+info.Referer)
+	if c.conn != nil {
+		c.conn.Close()
+		c.conn = nil
 	}
 
+	c.done = make(chan struct{})
+
+	args := make([]string, 0, len(c.args)+16)
+	args = append(args, c.args...)
+	args = append(args, "--input-ipc-server="+c.socketPath)
+	args = append(args, "--no-ytdl")
+
+	// Each header must be a separate --http-header-fields call
+	if info.Referer != "" {
+		args = append(args, "--http-header-fields=Referer: "+info.Referer)
+		args = append(args, "--http-header-fields=Origin: "+info.Referer)
+	}
 	for k, v := range info.Headers {
+		if k == "Referer" || k == "Origin" {
+			continue
+		}
 		args = append(args, "--http-header-fields="+k+": "+v)
 	}
 
@@ -62,6 +76,10 @@ func (c *Client) Play(ctx context.Context, info *provider.StreamInfo, opts playe
 
 	go func() {
 		c.cmd.Wait()
+		if c.conn != nil {
+			c.conn.Close()
+			c.conn = nil
+		}
 		close(c.done)
 	}()
 

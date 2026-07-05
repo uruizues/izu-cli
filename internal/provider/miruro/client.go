@@ -1,0 +1,329 @@
+package miruro
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+	"strings"
+	"time"
+
+	"github.com/izu/izu-cli/internal/provider"
+)
+
+const DefaultBaseURL = "http://localhost:8000"
+
+type Client struct {
+	baseURL    string
+	httpClient *http.Client
+}
+
+func NewClient(baseURL string) *Client {
+	if baseURL == "" {
+		baseURL = DefaultBaseURL
+	}
+	return &Client{
+		baseURL: baseURL,
+		httpClient: &http.Client{
+			Timeout: 30 * time.Second,
+		},
+	}
+}
+
+func (c *Client) Name() string {
+	return "miruro"
+}
+
+func (c *Client) Close() error {
+	return nil
+}
+
+func (c *Client) doRequest(url string) ([]byte, error) {
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", "izu-cli/1.0")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("API error (status %d): %s", resp.StatusCode, string(body))
+	}
+
+	return body, nil
+}
+
+type searchResponse struct {
+	Page    int `json:"page"`
+	PerPage int `json:"perPage"`
+	Total   int `json:"total"`
+	Results []struct {
+		ID       int `json:"id"`
+		Title    struct {
+			Romaji  string `json:"romaji"`
+			English string `json:"english"`
+		} `json:"title"`
+		CoverImage struct {
+			Large string `json:"large"`
+		} `json:"coverImage"`
+		Format   string `json:"format"`
+		Episodes int    `json:"episodes"`
+		Status   string `json:"status"`
+	} `json:"results"`
+}
+
+func (c *Client) Search(ctx context.Context, query string) ([]provider.SearchResult, error) {
+	url := fmt.Sprintf("%s/search?query=%s&per_page=20", c.baseURL, url.QueryEscape(query))
+	data, err := c.doRequest(url)
+	if err != nil {
+		return nil, err
+	}
+
+	var resp searchResponse
+	if err := json.Unmarshal(data, &resp); err != nil {
+		return nil, err
+	}
+
+	results := make([]provider.SearchResult, 0, len(resp.Results))
+	for _, r := range resp.Results {
+		title := r.Title.English
+		if title == "" {
+			title = r.Title.Romaji
+		}
+		results = append(results, provider.SearchResult{
+			ID:       fmt.Sprintf("%d", r.ID),
+			Title:    title,
+			Image:    r.CoverImage.Large,
+			Type:     r.Format,
+			Episodes: r.Episodes,
+			Status:   r.Status,
+		})
+	}
+
+	return results, nil
+}
+
+type infoResponse struct {
+	ID          int `json:"id"`
+	Title       struct {
+		Romaji  string `json:"romaji"`
+		English string `json:"english"`
+		Native  string `json:"native"`
+	} `json:"title"`
+	Description string `json:"description"`
+	CoverImage  struct {
+		Large string `json:"large"`
+	} `json:"coverImage"`
+	Format   string `json:"format"`
+	Episodes int    `json:"episodes"`
+	Status   string `json:"status"`
+	Genres   []string `json:"genres"`
+}
+
+func (c *Client) GetAnime(ctx context.Context, id string) (*provider.Anime, error) {
+	url := fmt.Sprintf("%s/info/%s", c.baseURL, id)
+	data, err := c.doRequest(url)
+	if err != nil {
+		return nil, err
+	}
+
+	var resp infoResponse
+	if err := json.Unmarshal(data, &resp); err != nil {
+		return nil, err
+	}
+
+	title := resp.Title.English
+	if title == "" {
+		title = resp.Title.Romaji
+	}
+
+	return &provider.Anime{
+		ID:          fmt.Sprintf("%d", resp.ID),
+		Title:       title,
+		Japanese:    resp.Title.Native,
+		Description: resp.Description,
+		Image:       resp.CoverImage.Large,
+		Type:        resp.Format,
+		Episodes:    resp.Episodes,
+		Status:      resp.Status,
+		Genres:      resp.Genres,
+	}, nil
+}
+
+type episodesResponse struct {
+	Providers map[string]struct {
+		Episodes map[string][]struct {
+			ID     string `json:"id"`
+			Number int    `json:"number"`
+			Title  string `json:"title"`
+		} `json:"episodes"`
+	} `json:"providers"`
+}
+
+func (c *Client) GetEpisodes(ctx context.Context, animeID string, page int) (*provider.EpisodePage, error) {
+	url := fmt.Sprintf("%s/episodes/%s", c.baseURL, animeID)
+	data, err := c.doRequest(url)
+	if err != nil {
+		return nil, err
+	}
+
+	var resp episodesResponse
+	if err := json.Unmarshal(data, &resp); err != nil {
+		return nil, err
+	}
+
+	// Pick the first available provider's episode list (simple ID)
+	var episodes []provider.Episode
+	for _, provData := range resp.Providers {
+		for _, epList := range provData.Episodes {
+			for _, ep := range epList {
+				episodes = append(episodes, provider.Episode{
+					ID:     ep.ID,
+					Number: ep.Number,
+					Title:  ep.Title,
+				})
+			}
+			break
+		}
+		break
+	}
+
+	pageSize := 25
+	start := (page - 1) * pageSize
+	if start >= len(episodes) {
+		start = len(episodes)
+	}
+	end := start + pageSize
+	if end > len(episodes) {
+		end = len(episodes)
+	}
+
+	return &provider.EpisodePage{
+		Episodes:    episodes[start:end],
+		TotalPages:  (len(episodes) + pageSize - 1) / pageSize,
+		CurrentPage: page,
+		HasNext:     end < len(episodes),
+	}, nil
+}
+
+type streamResponse struct {
+	Streams []struct {
+		URL      string `json:"url"`
+		Type     string `json:"type"`
+		Quality  string `json:"quality"`
+		Referer  string `json:"referer"`
+	} `json:"streams"`
+	Subtitles []struct {
+		File  string `json:"file"`
+		Label string `json:"label"`
+	} `json:"subtitles"`
+	Intro *struct {
+		Start int `json:"start"`
+		End   int `json:"end"`
+	} `json:"intro"`
+	Outro *struct {
+		Start int `json:"start"`
+		End   int `json:"end"`
+	} `json:"outro"`
+}
+
+func (c *Client) GetStream(ctx context.Context, episodeID string) (*provider.StreamInfo, error) {
+	// episodeID is a Miruro path like "watch/kiwi/20/sub/animepahe-1"
+	// Try it first, then try alternative providers if it fails
+	providers := []string{"kiwi", "bee", "ally", "bonk", "moo", "ANIMEDUNYA"}
+
+	// Extract the non-provider parts: /watch/{PROVIDER}/20/sub/animepahe-1
+	parts := strings.Split(episodeID, "/")
+	if len(parts) < 5 {
+		// Fallback: just try the ID as-is
+		return c.fetchStream(episodeID)
+	}
+
+	// Build IDs for each provider
+	var candidates []string
+	for _, prov := range providers {
+		parts[2] = prov
+		candidates = append(candidates, strings.Join(parts, "/"))
+	}
+
+	var lastErr error
+	for _, path := range candidates {
+		info, err := c.fetchStream(path)
+		if err == nil {
+			return info, nil
+		}
+		lastErr = err
+	}
+
+	return nil, fmt.Errorf("all providers failed: %v", lastErr)
+}
+
+func (c *Client) fetchStream(path string) (*provider.StreamInfo, error) {
+	url := fmt.Sprintf("%s/%s", c.baseURL, path)
+	data, err := c.doRequest(url)
+	if err != nil {
+		return nil, err
+	}
+
+	var resp streamResponse
+	if err := json.Unmarshal(data, &resp); err != nil {
+		return nil, err
+	}
+
+	if len(resp.Streams) == 0 {
+		return nil, fmt.Errorf("no streams")
+	}
+
+	info := &provider.StreamInfo{
+		Headers: map[string]string{},
+	}
+
+	for _, s := range resp.Streams {
+		if s.Type == "hls" {
+			info.URL = s.URL
+			info.Quality = s.Quality
+			info.Format = "hls"
+			if s.Referer != "" {
+				info.Referer = s.Referer
+				info.Headers["Referer"] = s.Referer
+				info.Headers["Origin"] = s.Referer
+			}
+			break
+		}
+	}
+
+	if info.URL == "" && len(resp.Streams) > 0 {
+		s := resp.Streams[0]
+		info.URL = s.URL
+		info.Quality = s.Quality
+		info.Format = "mp4"
+		if s.Referer != "" {
+			info.Referer = s.Referer
+			info.Headers["Referer"] = s.Referer
+			info.Headers["Origin"] = s.Referer
+		}
+	}
+
+	for _, sub := range resp.Subtitles {
+		info.Subtitles = append(info.Subtitles, provider.Subtitle{
+			URL:    sub.File,
+			Label:  sub.Label,
+			Lang:   sub.Label,
+			Format: "vtt",
+		})
+	}
+
+	return info, nil
+}

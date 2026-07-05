@@ -7,21 +7,25 @@ import (
 )
 
 type SearchModel struct {
-	input   textinput.Model
-	results []provider.SearchResult
-	cursor  int
-	loading bool
-	err     error
+	input     textinput.Model
+	results   []provider.SearchResult
+	cursor    int
+	loading   bool
+	err       error
+	inputMode bool // true = accept text input, managed by app.go
 }
 
 func NewSearchModel() SearchModel {
 	ti := textinput.New()
 	ti.Placeholder = "Search anime..."
-	ti.Focus()
 	ti.CharLimit = 256
 	ti.Width = 50
+	// Focus the textinput once and never touch focus state again.
+	// We gate key routing via inputMode in app.go instead.
+	ti.Focus()
 	return SearchModel{
-		input: ti,
+		input:     ti,
+		inputMode: true,
 	}
 }
 
@@ -30,36 +34,31 @@ func (m SearchModel) Init() tea.Cmd {
 }
 
 func (m SearchModel) Update(msg tea.Msg) (SearchModel, tea.Cmd) {
-	var cmds []tea.Cmd
-
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		switch msg.Type {
-		case tea.KeyEnter:
-			if len(m.results) > 0 {
-				m.cursor = 0
-				return m, nil
-			}
-		case tea.KeyUp:
-			if m.cursor > 0 {
-				m.cursor--
-			}
-		case tea.KeyDown:
-			if m.cursor < len(m.results)-1 {
-				m.cursor++
-			}
-		}
+		// Always pass keys to the textinput — key routing is controlled
+		// by inputMode in app.go, not by textinput's internal focus state.
+		var cmd tea.Cmd
+		m.input, cmd = m.input.Update(msg)
+		return m, cmd
+
 	case searchResultsMsg:
 		m.results = msg.results
 		m.loading = false
 		m.err = msg.err
 	}
 
-	var cmd tea.Cmd
-	m.input, cmd = m.input.Update(msg)
-	cmds = append(cmds, cmd)
+	return m, nil
+}
 
-	return m, tea.Batch(cmds...)
+// EnterInputMode activates text input. Called by app.go.
+func (m *SearchModel) EnterInputMode() {
+	m.inputMode = true
+}
+
+// ExitInputMode deactivates text input. Called by app.go.
+func (m *SearchModel) ExitInputMode() {
+	m.inputMode = false
 }
 
 func (m SearchModel) View() string {

@@ -22,11 +22,11 @@ type searchResponse struct {
 				Total int `json:"total"`
 			} `json:"pageInfo"`
 			Edges []struct {
-				ID                 string            `json:"_id"`
-				Name               string            `json:"name"`
-				EnglishName        string            `json:"englishName"`
-				NativeName         string            `json:"nativeName"`
-				AvailableEpisodes map[string]string `json:"availableEpisodes"`
+				ID                 string         `json:"_id"`
+				Name               string         `json:"name"`
+				EnglishName        string         `json:"englishName"`
+				NativeName         string         `json:"nativeName"`
+				AvailableEpisodes map[string]int `json:"availableEpisodes"`
 			} `json:"edges"`
 		} `json:"shows"`
 	} `json:"data"`
@@ -57,10 +57,7 @@ func (c *Client) Search(ctx context.Context, query string) ([]provider.SearchRes
 
 	var results []provider.SearchResult
 	for _, edge := range resp.Data.Shows.Edges {
-		epCount := 0
-		if sub, ok := edge.AvailableEpisodes["sub"]; ok {
-			fmt.Sscanf(sub, "%d", &epCount)
-		}
+		epCount := edge.AvailableEpisodes["sub"]
 
 		title := edge.Name
 		if edge.EnglishName != "" {

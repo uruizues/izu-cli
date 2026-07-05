@@ -5,6 +5,7 @@ type Config struct {
 	Player    PlayerConfig    `mapstructure:"player"`
 	Download  DownloadConfig  `mapstructure:"download"`
 	Providers ProvidersConfig `mapstructure:"providers"`
+	Consumet  ConsumetConfig  `mapstructure:"consumet"`
 	Discord   DiscordConfig   `mapstructure:"discord"`
 	Storage   StorageConfig   `mapstructure:"storage"`
 }
@@ -29,7 +30,22 @@ type DownloadConfig struct {
 	Concurrent int    `mapstructure:"concurrent"`
 }
 
+type ConsumetConfig struct {
+	Enabled  bool   `mapstructure:"enabled"`
+	BaseURL  string `mapstructure:"base_url"`
+	Provider string `mapstructure:"provider"`
+}
+
 type ProvidersConfig struct {
+	ConsumetAnimeKai    ProviderConfig `mapstructure:"consumet_animekai"`
+	ConsumetHiAnime     ProviderConfig `mapstructure:"consumet_hianime"`
+	ConsumetAnimePahe   ProviderConfig `mapstructure:"consumet_animepahe"`
+	ConsumetAnimeSama   ProviderConfig `mapstructure:"consumet_animesama"`
+	ConsumetAnimeSaturn ProviderConfig `mapstructure:"consumet_animesaturn"`
+	ConsumetAnimeUnity  ProviderConfig `mapstructure:"consumet_animeunity"`
+	ConsumetKickass     ProviderConfig `mapstructure:"consumet_kickassanime"`
+	Miruro              ProviderConfig `mapstructure:"miruro"`
+	// Keep old providers for backward compatibility
 	AnimeKai  ProviderConfig `mapstructure:"animekai"`
 	AllAnime  ProviderConfig `mapstructure:"allanime"`
 	AnimePahe ProviderConfig `mapstructure:"animepahe"`
