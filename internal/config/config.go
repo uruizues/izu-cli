@@ -77,7 +77,7 @@ func Load() (*Config, error) {
 	v.SetDefault("providers.miruro.enabled", false)
 	v.SetDefault("providers.miruro.base_url", "http://localhost:8000")
 
-	v.SetDefault("discord.enabled", false)
+	v.SetDefault("discord.enabled", true)
 	v.SetDefault("discord.client_id", "")
 
 	// Try to read existing config

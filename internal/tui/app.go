@@ -10,6 +10,7 @@ import (
 	"github.com/izu/izu-cli/internal/player"
 	"github.com/izu/izu-cli/internal/player/mpv"
 	"github.com/izu/izu-cli/internal/provider"
+	"github.com/izu/izu-cli/internal/rpc"
 	"github.com/izu/izu-cli/internal/storage"
 )
 
@@ -36,13 +37,14 @@ type Model struct {
 	providerIdx int
 	player      player.Player
 	playerCmd   context.CancelFunc
+	discord     *rpc.DiscordRPC
 	width       int
 	height      int
 	ready       bool
 	err         error
 }
 
-func NewModel(providers []provider.Provider, s storage.Storage) Model {
+func NewModel(providers []provider.Provider, s storage.Storage, discord *rpc.DiscordRPC) Model {
 	urlInput := textinput.New()
 	urlInput.Placeholder = "Paste anime URL (animepahe, zoro, etc.)"
 	urlInput.CharLimit = 512
@@ -58,6 +60,7 @@ func NewModel(providers []provider.Provider, s storage.Storage) Model {
 		keys:      DefaultKeyMap(),
 		providers: providers,
 		player:    mpv.New("mpv", []string{}, "/tmp/izu-mpv-socket"),
+		discord:   discord,
 	}
 	m.search.EnterInputMode()
 	return m
@@ -234,6 +237,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		go func() {
 			m.player.Play(ctx, msg.info, player.PlayOptions{})
 		}()
+		// Set Discord RPC activity
+		if m.discord != nil && m.episodes.anime != nil {
+			epNum := 0
+			if len(m.episodes.episodes) > 0 && m.episodes.cursor < len(m.episodes.episodes) {
+				epNum = m.episodes.episodes[m.episodes.cursor].Number
+			}
+			m.discord.SetWatching(m.episodes.anime.Title, epNum)
+		}
 		return m, nil
 
 	case episodeListMsg:
