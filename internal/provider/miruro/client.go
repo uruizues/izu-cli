@@ -70,7 +70,7 @@ type jikanSearchResponse struct {
 		MALID   int `json:"mal_id"`
 		Title   string `json:"title"`
 		TitleEnglish *string `json:"title_english"`
-		Images []struct {
+		Images struct {
 			JPG struct {
 				ImageURL string `json:"image_url"`
 			} `json:"jpg"`
@@ -100,10 +100,7 @@ func (c *Client) Search(ctx context.Context, query string) ([]provider.SearchRes
 			title = *r.TitleEnglish
 		}
 
-		image := ""
-		if len(r.Images) > 0 {
-			image = r.Images[0].JPG.ImageURL
-		}
+		image := r.Images.JPG.ImageURL
 
 		episodes := 0
 		if r.Episodes != nil {
