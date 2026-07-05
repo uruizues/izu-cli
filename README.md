@@ -9,10 +9,13 @@
 </p>
 
 <p align="center">
+  <img src="https://img.shields.io/badge/100%25-MiMoCode%20Vibe%20Coded-purple?style=flat" alt="Vibe Coded">
   <img src="https://img.shields.io/badge/go-1.22+-00ADD8?style=flat&logo=go" alt="Go">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
   <img src="https://img.shields.io/badge/platform-linux%20%7C%20macos%20%7C%20windows-blue" alt="Platform">
 </p>
+
+> **100% Vibe Coded with MiMoCode** — this entire project was built collaboratively with AI assistance. Every feature, every fix, every line of code was written through conversation.
 
 ---
 
