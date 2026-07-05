@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"net/url"
 	"sort"
-	"strings"
 	"time"
 
 	"github.com/izu/izu-cli/internal/provider"
@@ -247,33 +246,7 @@ type streamResponse struct {
 
 func (c *Client) GetStream(ctx context.Context, episodeID string) (*provider.StreamInfo, error) {
 	// episodeID is a Miruro path like "watch/kiwi/20/sub/animepahe-1"
-	// Try it first, then try alternative providers if it fails
-	providers := []string{"kiwi", "bee", "ally", "bonk", "moo", "ANIMEDUNYA"}
-
-	// Extract the non-provider parts: /watch/{PROVIDER}/20/sub/animepahe-1
-	parts := strings.Split(episodeID, "/")
-	if len(parts) < 5 {
-		// Fallback: just try the ID as-is
-		return c.fetchStream(episodeID)
-	}
-
-	// Build IDs for each provider — provider is at index 1
-	var candidates []string
-	for _, prov := range providers {
-		parts[1] = prov
-		candidates = append(candidates, strings.Join(parts, "/"))
-	}
-
-	var lastErr error
-	for _, path := range candidates {
-		info, err := c.fetchStream(path)
-		if err == nil {
-			return info, nil
-		}
-		lastErr = err
-	}
-
-	return nil, fmt.Errorf("all providers failed: %v", lastErr)
+	return c.fetchStream(episodeID)
 }
 
 func (c *Client) fetchStream(path string) (*provider.StreamInfo, error) {
