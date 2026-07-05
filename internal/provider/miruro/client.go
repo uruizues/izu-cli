@@ -178,28 +178,43 @@ type episodesResponse struct {
 }
 
 func (c *Client) GetEpisodes(ctx context.Context, animeID string, page int) (*provider.EpisodePage, error) {
-	// Try Miruro first
 	url := fmt.Sprintf("%s/episodes/%s", c.baseURL, animeID)
 	data, err := c.doRequest(url)
 	if err == nil {
 		var resp episodesResponse
 		if json.Unmarshal(data, &resp) == nil && len(resp.Providers) > 0 {
-			var episodes []provider.Episode
+			// Collect all episodes from all providers
+			var allEpisodes []provider.Episode
 			for _, provData := range resp.Providers {
 				for _, epList := range provData.Episodes {
 					for _, ep := range epList {
-						episodes = append(episodes, provider.Episode{
+						allEpisodes = append(allEpisodes, provider.Episode{
 							ID:     ep.ID,
 							Number: ep.Number,
 							Title:  ep.Title,
 						})
 					}
-					break
 				}
-				break
 			}
 
-			if len(episodes) > 0 {
+			if len(allEpisodes) > 0 {
+				// Prefer animepahe episodes — group by episode number
+				epMap := map[int]provider.Episode{}
+				for _, ep := range allEpisodes {
+					if _, exists := epMap[ep.Number]; !exists {
+						epMap[ep.Number] = ep
+					}
+					// Override with animepahe if slug contains it
+					if len(ep.ID) > 0 && contains(ep.ID, "animepahe") {
+						epMap[ep.Number] = ep
+					}
+				}
+
+				var episodes []provider.Episode
+				for _, ep := range epMap {
+					episodes = append(episodes, ep)
+				}
+
 				sort.Slice(episodes, func(i, j int) bool {
 					return episodes[i].Number < episodes[j].Number
 				})
@@ -225,6 +240,19 @@ func (c *Client) GetEpisodes(ctx context.Context, animeID string, page int) (*pr
 	}
 
 	return nil, fmt.Errorf("episodes not available — AniList may be temporarily down. Try another anime")
+}
+
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && searchSubstring(s, substr)
+}
+
+func searchSubstring(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
 }
 
 type streamResponse struct {
