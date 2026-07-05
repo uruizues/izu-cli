@@ -65,49 +65,57 @@ func (c *Client) doRequest(url string) ([]byte, error) {
 	return body, nil
 }
 
-type searchResponse struct {
-	Page    int `json:"page"`
-	PerPage int `json:"perPage"`
-	Total   int `json:"total"`
-	Results []struct {
-		ID       int `json:"id"`
-		Title    struct {
-			Romaji  string `json:"romaji"`
-			English string `json:"english"`
-		} `json:"title"`
-		CoverImage struct {
-			Large string `json:"large"`
-		} `json:"coverImage"`
-		Format   string `json:"format"`
-		Episodes int    `json:"episodes"`
+type jikanSearchResponse struct {
+	Data []struct {
+		MALID   int `json:"mal_id"`
+		Title   string `json:"title"`
+		TitleEnglish *string `json:"title_english"`
+		Images []struct {
+			JPG struct {
+				ImageURL string `json:"image_url"`
+			} `json:"jpg"`
+		} `json:"images"`
+		Type     string `json:"type"`
+		Episodes *int   `json:"episodes"`
 		Status   string `json:"status"`
-	} `json:"results"`
+	} `json:"data"`
 }
 
 func (c *Client) Search(ctx context.Context, query string) ([]provider.SearchResult, error) {
-	url := fmt.Sprintf("%s/search?query=%s&per_page=20", c.baseURL, url.QueryEscape(query))
-	data, err := c.doRequest(url)
+	jikanURL := fmt.Sprintf("https://api.jikan.moe/v4/anime?q=%s&limit=20", url.QueryEscape(query))
+	data, err := c.doRequest(jikanURL)
 	if err != nil {
 		return nil, err
 	}
 
-	var resp searchResponse
+	var resp jikanSearchResponse
 	if err := json.Unmarshal(data, &resp); err != nil {
 		return nil, err
 	}
 
-	results := make([]provider.SearchResult, 0, len(resp.Results))
-	for _, r := range resp.Results {
-		title := r.Title.English
-		if title == "" {
-			title = r.Title.Romaji
+	results := make([]provider.SearchResult, 0, len(resp.Data))
+	for _, r := range resp.Data {
+		title := r.Title
+		if r.TitleEnglish != nil && *r.TitleEnglish != "" {
+			title = *r.TitleEnglish
 		}
+
+		image := ""
+		if len(r.Images) > 0 {
+			image = r.Images[0].JPG.ImageURL
+		}
+
+		episodes := 0
+		if r.Episodes != nil {
+			episodes = *r.Episodes
+		}
+
 		results = append(results, provider.SearchResult{
-			ID:       fmt.Sprintf("%d", r.ID),
+			ID:       fmt.Sprintf("%d", r.MALID),
 			Title:    title,
-			Image:    r.CoverImage.Large,
-			Type:     r.Format,
-			Episodes: r.Episodes,
+			Image:    image,
+			Type:     r.Type,
+			Episodes: episodes,
 			Status:   r.Status,
 		})
 	}
