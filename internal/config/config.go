@@ -23,7 +23,7 @@ func Load() (*Config, error) {
 	v.AddConfigPath(configDir)
 
 	// Set defaults
-	v.SetDefault("general.provider", "allanime")
+	v.SetDefault("general.provider", "miruro")
 	v.SetDefault("general.theme", "dark")
 	v.SetDefault("general.language", "en")
 	v.SetDefault("player.volume", 100)
