@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/izu/izu-cli/internal/provider"
@@ -107,8 +108,11 @@ func (c *Client) Search(ctx context.Context, query string) ([]provider.SearchRes
 			episodes = *r.Episodes
 		}
 
+		// Convert MAL ID to AniList ID for Miruro compatibility
+		anilistID := c.malToAnilist(r.MALID)
+
 		results = append(results, provider.SearchResult{
-			ID:       fmt.Sprintf("%d", r.MALID),
+			ID:       anilistID,
 			Title:    title,
 			Image:    image,
 			Type:     r.Type,
@@ -118,6 +122,39 @@ func (c *Client) Search(ctx context.Context, query string) ([]provider.SearchRes
 	}
 
 	return results, nil
+}
+
+func (c *Client) malToAnilist(malID int) string {
+	query := `query ($malId: Int) { Media(idMal: $malId, type: ANIME) { id } }`
+	body := fmt.Sprintf(`{"query":"%s","variables":{"malId":%d}}`, query, malID)
+
+	req, err := http.NewRequest("POST", "https://graphql.anilist.co", strings.NewReader(body))
+	if err != nil {
+		return fmt.Sprintf("%d", malID)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Sprintf("%d", malID)
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Data struct {
+			Media struct {
+				ID int `json:"id"`
+			} `json:"Media"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return fmt.Sprintf("%d", malID)
+	}
+
+	if result.Data.Media.ID > 0 {
+		return fmt.Sprintf("%d", result.Data.Media.ID)
+	}
+	return fmt.Sprintf("%d", malID)
 }
 
 type infoResponse struct {
