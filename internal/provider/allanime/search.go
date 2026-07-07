@@ -3,7 +3,6 @@ package allanime
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 
 	"github.com/izu/izu-cli/internal/provider"
 )

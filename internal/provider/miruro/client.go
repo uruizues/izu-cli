@@ -278,13 +278,15 @@ func searchSubstring(s, substr string) bool {
 	return false
 }
 
+type streamEntry struct {
+	URL     string `json:"url"`
+	Type    string `json:"type"`
+	Quality string `json:"quality"`
+	Referer string `json:"referer"`
+}
+
 type streamResponse struct {
-	Streams []struct {
-		URL      string `json:"url"`
-		Type     string `json:"type"`
-		Quality  string `json:"quality"`
-		Referer  string `json:"referer"`
-	} `json:"streams"`
+	Streams []streamEntry `json:"streams"`
 	Subtitles []struct {
 		File  string `json:"file"`
 		Label string `json:"label"`
@@ -320,36 +322,72 @@ func (c *Client) fetchStream(path string) (*provider.StreamInfo, error) {
 		return nil, fmt.Errorf("no streams")
 	}
 
+	// Sort streams: prefer HLS, then by quality
+	type candidate struct {
+		stream streamEntry
+		format string
+	}
+	var candidates []candidate
+	for _, s := range resp.Streams {
+		f := "mp4"
+		if s.Type == "hls" {
+			f = "hls"
+		}
+		candidates = append(candidates, candidate{stream: s, format: f})
+	}
+	// HLS first
+	sort.SliceStable(candidates, func(i, j int) bool {
+		if candidates[i].format == "hls" && candidates[j].format != "hls" {
+			return true
+		}
+		if candidates[i].format != "hls" && candidates[j].format == "hls" {
+			return false
+		}
+		return false
+	})
+
+	// Try each stream URL with a quick HEAD check
+	for _, cand := range candidates {
+		if ok := c.checkStreamURL(cand.stream.URL); ok {
+			info := &provider.StreamInfo{
+				URL:     cand.stream.URL,
+				Quality: cand.stream.Quality,
+				Format:  cand.format,
+				Headers: map[string]string{},
+			}
+			if cand.stream.Referer != "" {
+				info.Referer = cand.stream.Referer
+				info.Headers["Referer"] = cand.stream.Referer
+				info.Headers["Origin"] = cand.stream.Referer
+			}
+			for _, sub := range resp.Subtitles {
+				info.Subtitles = append(info.Subtitles, provider.Subtitle{
+					URL:    sub.File,
+					Label:  sub.Label,
+					Lang:   sub.Label,
+					Format: "vtt",
+				})
+			}
+			return info, nil
+		}
+	}
+
+	// Fallback: return first stream even if HEAD check failed (CDN may block HEAD but allow GET)
+	s := resp.Streams[0]
 	info := &provider.StreamInfo{
+		URL:     s.URL,
+		Quality: s.Quality,
+		Format:  "mp4",
 		Headers: map[string]string{},
 	}
-
-	for _, s := range resp.Streams {
-		if s.Type == "hls" {
-			info.URL = s.URL
-			info.Quality = s.Quality
-			info.Format = "hls"
-			if s.Referer != "" {
-				info.Referer = s.Referer
-				info.Headers["Referer"] = s.Referer
-				info.Headers["Origin"] = s.Referer
-			}
-			break
-		}
+	if s.Type == "hls" {
+		info.Format = "hls"
 	}
-
-	if info.URL == "" && len(resp.Streams) > 0 {
-		s := resp.Streams[0]
-		info.URL = s.URL
-		info.Quality = s.Quality
-		info.Format = "mp4"
-		if s.Referer != "" {
-			info.Referer = s.Referer
-			info.Headers["Referer"] = s.Referer
-			info.Headers["Origin"] = s.Referer
-		}
+	if s.Referer != "" {
+		info.Referer = s.Referer
+		info.Headers["Referer"] = s.Referer
+		info.Headers["Origin"] = s.Referer
 	}
-
 	for _, sub := range resp.Subtitles {
 		info.Subtitles = append(info.Subtitles, provider.Subtitle{
 			URL:    sub.File,
@@ -358,6 +396,19 @@ func (c *Client) fetchStream(path string) (*provider.StreamInfo, error) {
 			Format: "vtt",
 		})
 	}
-
 	return info, nil
+}
+
+func (c *Client) checkStreamURL(streamURL string) bool {
+	req, err := http.NewRequest("HEAD", streamURL, nil)
+	if err != nil {
+		return false
+	}
+	req.Header.Set("User-Agent", "izu-cli/1.0")
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return false
+	}
+	resp.Body.Close()
+	return resp.StatusCode == http.StatusOK
 }

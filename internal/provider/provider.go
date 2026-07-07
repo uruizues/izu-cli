@@ -65,3 +65,14 @@ type Subtitle struct {
     Label  string `json:"label"`
     Format string `json:"format"`
 }
+
+// StreamSource represents a single video stream with quality and playback metadata.
+// Ported from anipy-cli's ProviderStream pattern.
+type StreamSource struct {
+    URL        string     `json:"url"`
+    Resolution string     `json:"resolution"`
+    Referrer   string     `json:"referrer"`
+    Subtitles  []Subtitle `json:"subtitles,omitempty"`
+    Language   string     `json:"language"` // "sub" or "dub"
+    Bandwidth  int        `json:"bandwidth,omitempty"`
+}

@@ -47,7 +47,7 @@ func (c *Client) Play(ctx context.Context, info *provider.StreamInfo, opts playe
 	if info.Referer != "" {
 		args = append(args, "--http-header-fields=Referer: "+info.Referer)
 		args = append(args, "--http-header-fields=Origin: "+info.Referer)
-		// Also pass to ffmpeg demuxer for HLS
+		// Also pass to ffmpeg demuxer for HLS — use actual \r\n for HTTP header separation
 		args = append(args, "--demuxer-lavf-o=headers=Referer: "+info.Referer+"\r\nOrigin: "+info.Referer)
 	}
 	for k, v := range info.Headers {
