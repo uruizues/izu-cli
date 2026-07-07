@@ -43,10 +43,12 @@ func (c *Client) Play(ctx context.Context, info *provider.StreamInfo, opts playe
 	args = append(args, "--input-ipc-server="+c.socketPath)
 	args = append(args, "--no-ytdl")
 
-	// Each header must be a separate --http-header-fields call
+	// Pass headers to both mpv and ffmpeg (for HLS streams)
 	if info.Referer != "" {
 		args = append(args, "--http-header-fields=Referer: "+info.Referer)
 		args = append(args, "--http-header-fields=Origin: "+info.Referer)
+		// Also pass to ffmpeg demuxer for HLS
+		args = append(args, "--demuxer-lavf-o=headers=Referer: "+info.Referer+"\r\nOrigin: "+info.Referer)
 	}
 	for k, v := range info.Headers {
 		if k == "Referer" || k == "Origin" {
