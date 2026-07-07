@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"sort"
 	"strings"
 	"time"
@@ -66,95 +65,72 @@ func (c *Client) doRequest(url string) ([]byte, error) {
 	return body, nil
 }
 
-type jikanSearchResponse struct {
-	Data []struct {
-		MALID   int `json:"mal_id"`
-		Title   string `json:"title"`
-		TitleEnglish *string `json:"title_english"`
-		Images struct {
-			JPG struct {
-				ImageURL string `json:"image_url"`
-			} `json:"jpg"`
-		} `json:"images"`
-		Type     string `json:"type"`
-		Episodes *int   `json:"episodes"`
-		Status   string `json:"status"`
+type anilistSearchResponse struct {
+	Data struct {
+		Page struct {
+			Media []struct {
+				ID       int `json:"id"`
+				Title    struct {
+					Romaji  string `json:"romaji"`
+					English string `json:"english"`
+				} `json:"title"`
+				CoverImage struct {
+					Large string `json:"large"`
+				} `json:"coverImage"`
+				Format   string `json:"format"`
+				Episodes *int  `json:"episodes"`
+				Status   string `json:"status"`
+			} `json:"media"`
+		} `json:"Page"`
 	} `json:"data"`
 }
 
 func (c *Client) Search(ctx context.Context, query string) ([]provider.SearchResult, error) {
-	jikanURL := fmt.Sprintf("https://api.jikan.moe/v4/anime?q=%s&limit=20", url.QueryEscape(query))
-	data, err := c.doRequest(jikanURL)
-	if err != nil {
-		return nil, err
-	}
-
-	var resp jikanSearchResponse
-	if err := json.Unmarshal(data, &resp); err != nil {
-		return nil, err
-	}
-
-	results := make([]provider.SearchResult, 0, len(resp.Data))
-	for _, r := range resp.Data {
-		title := r.Title
-		if r.TitleEnglish != nil && *r.TitleEnglish != "" {
-			title = *r.TitleEnglish
-		}
-
-		image := r.Images.JPG.ImageURL
-
-		episodes := 0
-		if r.Episodes != nil {
-			episodes = *r.Episodes
-		}
-
-		// Convert MAL ID to AniList ID for Miruro compatibility
-		anilistID := c.malToAnilist(r.MALID)
-
-		results = append(results, provider.SearchResult{
-			ID:       anilistID,
-			Title:    title,
-			Image:    image,
-			Type:     r.Type,
-			Episodes: episodes,
-			Status:   r.Status,
-		})
-	}
-
-	return results, nil
-}
-
-func (c *Client) malToAnilist(malID int) string {
-	query := `query ($malId: Int) { Media(idMal: $malId, type: ANIME) { id } }`
-	body := fmt.Sprintf(`{"query":"%s","variables":{"malId":%d}}`, query, malID)
+	gqlQuery := `query ($search: String) { Page(page: 1, perPage: 20) { media(search: $search, type: ANIME, sort: SEARCH_MATCH) { id title { romaji english } coverImage { large } format episodes status } } }`
+	body := fmt.Sprintf(`{"query":"%s","variables":{"search":"%s"}}`, gqlQuery, query)
 
 	req, err := http.NewRequest("POST", "https://graphql.anilist.co", strings.NewReader(body))
 	if err != nil {
-		return fmt.Sprintf("%d", malID)
+		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return fmt.Sprintf("%d", malID)
+		return nil, fmt.Errorf("AniList unavailable")
 	}
 	defer resp.Body.Close()
 
-	var result struct {
-		Data struct {
-			Media struct {
-				ID int `json:"id"`
-			} `json:"Media"`
-		} `json:"data"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return fmt.Sprintf("%d", malID)
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("AniList unavailable (status %d)", resp.StatusCode)
 	}
 
-	if result.Data.Media.ID > 0 {
-		return fmt.Sprintf("%d", result.Data.Media.ID)
+	var result anilistSearchResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
 	}
-	return fmt.Sprintf("%d", malID)
+
+	results := make([]provider.SearchResult, 0, len(result.Data.Page.Media))
+	for _, m := range result.Data.Page.Media {
+		title := m.Title.English
+		if title == "" {
+			title = m.Title.Romaji
+		}
+		episodes := 0
+		if m.Episodes != nil {
+			episodes = *m.Episodes
+		}
+		results = append(results, provider.SearchResult{
+			ID:       fmt.Sprintf("%d", m.ID),
+			Title:    title,
+			Image:    m.CoverImage.Large,
+			Type:     m.Format,
+			Episodes: episodes,
+			Status:   m.Status,
+		})
+	}
+
+	return results, nil
 }
 
 type infoResponse struct {
