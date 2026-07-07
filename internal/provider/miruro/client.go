@@ -87,9 +87,19 @@ type anilistSearchResponse struct {
 
 func (c *Client) Search(ctx context.Context, query string) ([]provider.SearchResult, error) {
 	gqlQuery := `query ($search: String) { Page(page: 1, perPage: 20) { media(search: $search, type: ANIME, sort: SEARCH_MATCH) { id title { romaji english } coverImage { large } format episodes status } } }`
-	body := fmt.Sprintf(`{"query":"%s","variables":{"search":"%s"}}`, gqlQuery, query)
 
-	req, err := http.NewRequest("POST", "https://graphql.anilist.co", strings.NewReader(body))
+	payload := map[string]interface{}{
+		"query": gqlQuery,
+		"variables": map[string]string{
+			"search": query,
+		},
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", "https://graphql.anilist.co", strings.NewReader(string(body)))
 	if err != nil {
 		return nil, err
 	}
